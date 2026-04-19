@@ -1,0 +1,39 @@
+{
+  "binance": {
+    "restUrl": "https://api.binance.com",
+    "wsUrl": "wss://stream.binance.com:9443/stream",
+    "topPairs": 80
+  },
+  "instances": [
+    {
+      "name": "Scalping 5m",
+      "telegramChatId": "-1000000000000",
+      "telegramTopicId": null,
+      "timeframe": "5m",
+      "language": "en",
+      "emaCrosses": [
+        { "fast": 9, "slow": 21 },
+        { "fast": 20, "slow": 50 }
+      ]
+    },
+    {
+      "name": "Swing 1h",
+      "telegramChatId": "-1000000000001",
+      "telegramTopicId": null,
+      "timeframe": "1h",
+      "language": "es",
+      "emaCrosses": [
+        { "fast": 20, "slow": 50 },
+        { "fast": 50, "slow": 200 }
+      ]
+    },
+    {
+      "name": "Daily 1d",
+      "telegramChatId": "-1000000000002",
+      "telegramTopicId": null,
+      "timeframe": "1d",
+      "language": "zh",
+      "emaCrosses": [{ "fast": 50, "slow": 200 }]
+    }
+  ]
+}

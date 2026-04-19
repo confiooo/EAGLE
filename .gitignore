@@ -1,0 +1,30 @@
+# Gradle
+.gradle/
+build/
+
+# Kotlin (K2 / tooling may create a project-level cache directory)
+.kotlin/
+
+# Secrets and local config (copy from config.example.json)
+.env
+.env.*
+!.env.example
+config.json
+
+# IDE
+.idea/
+*.iml
+.fleet/
+out/
+
+# OS & editor junk
+.DS_Store
+Thumbs.db
+*~
+*.swp
+*.swo
+
+# JVM
+*.class
+hs_err_pid*.log
+replay_pid*.log
