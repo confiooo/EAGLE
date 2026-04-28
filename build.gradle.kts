@@ -1,5 +1,6 @@
 plugins {
     kotlin("jvm") version "1.9.23"
+    kotlin("plugin.serialization") version "1.9.23"
     application
 }
 
@@ -17,6 +18,11 @@ dependencies {
     implementation("io.ktor:ktor-client-websockets:2.3.10")
     implementation("io.ktor:ktor-client-content-negotiation:2.3.10")
     implementation("io.ktor:ktor-serialization-kotlinx-json:2.3.10")
+
+    // Local web dashboard (web mode)
+    implementation("io.ktor:ktor-server-core:2.3.10")
+    implementation("io.ktor:ktor-server-cio:2.3.10")
+    implementation("io.ktor:ktor-server-content-negotiation:2.3.10")
 
     // JSON
     implementation("org.jetbrains.kotlinx:kotlinx-serialization-json:1.6.3")

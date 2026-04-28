@@ -1,11 +1,36 @@
 package eagle
 
+import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
 
 @Serializable
+enum class NotifyMode {
+    @SerialName("telegram")
+    TELEGRAM,
+
+    @SerialName("web")
+    WEB
+}
+
+@Serializable
 data class AppConfig(
+    /**
+     * `telegram` sends alerts to Telegram; `web` serves a local dashboard only
+     * (no bot token required).
+     */
+    val mode: NotifyMode = NotifyMode.TELEGRAM,
+    val web: WebDashboardConfig = WebDashboardConfig(),
     val binance: BinanceConfig = BinanceConfig(),
     val instances: List<InstanceConfig>
+)
+
+@Serializable
+data class WebDashboardConfig(
+    /** Bind address (default loopback). */
+    val host: String = "127.0.0.1",
+    val port: Int = 8080,
+    /** Max alerts kept in memory for the dashboard / API. */
+    val maxAlerts: Int = 500
 )
 
 @Serializable
@@ -20,7 +45,8 @@ data class BinanceConfig(
 data class InstanceConfig(
     /** Shown in logs and in alert headers. */
     val name: String,
-    val telegramChatId: String,
+    /** Required when [AppConfig.mode] is [NotifyMode.TELEGRAM]. */
+    val telegramChatId: String? = null,
     /** Forum topic id for supergroups; omit or null for the main chat. */
     val telegramTopicId: String? = null,
     /** Binance kline interval, e.g. 5m, 1h, 4h, 1d. */

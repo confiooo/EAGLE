@@ -1,4 +1,10 @@
 {
+  "mode": "telegram",
+  "web": {
+    "host": "127.0.0.1",
+    "port": 8080,
+    "maxAlerts": 500
+  },
   "binance": {
     "restUrl": "https://api.binance.com",
     "wsUrl": "wss://stream.binance.com:9443/stream",

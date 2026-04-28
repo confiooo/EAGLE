@@ -45,7 +45,7 @@ A single process opens **one socket per timeframe** and distributes data across 
 ## Quick start
 
 ```bash
-git clone <repository-url>
+git clone <https://github.com/confiooo/EAGLE>
 cd eagle
 
 cp .env.example .env
@@ -53,4 +53,3 @@ cp config.example.json config.json
 
 ./gradlew run
 ```
-

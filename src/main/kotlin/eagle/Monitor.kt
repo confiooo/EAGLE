@@ -46,15 +46,15 @@ private fun combinedStreamUrl(wsBase: String, symbols: List<String>, timeframe: 
  */
 suspend fun monitor(
     client: HttpClient,
-    botToken: String,
     symbols: List<String>,
     wsBase: String,
-    instances: List<InstanceConfig>
+    instances: List<InstanceConfig>,
+    onAlert: suspend (InstanceConfig, String, AlertMeta) -> Unit
 ) = coroutineScope {
     val byTimeframe = instances.groupBy { it.timeframe }
     byTimeframe.forEach { (timeframe, group) ->
         launch {
-            runTimeframeLoop(client, botToken, symbols, wsBase, timeframe, group)
+            runTimeframeLoop(client, symbols, wsBase, timeframe, group, onAlert)
         }
     }
 }
@@ -88,11 +88,11 @@ private fun crossAlertText(
 
 private suspend fun runTimeframeLoop(
     client: HttpClient,
-    botToken: String,
     symbols: List<String>,
     wsBase: String,
     timeframe: String,
-    instances: List<InstanceConfig>
+    instances: List<InstanceConfig>,
+    onAlert: suspend (InstanceConfig, String, AlertMeta) -> Unit
 ) {
     val url = combinedStreamUrl(wsBase, symbols, timeframe)
     val instanceStates = instances.map { InstanceState(it) }
@@ -147,6 +147,16 @@ private suspend fun runTimeframeLoop(
                                     slowEma = slowEma,
                                     close = close
                                 )
+                                val meta = AlertMeta(
+                                    symbol = symbol,
+                                    timeframe = timeframe,
+                                    bullish = bullish,
+                                    emaFast = cross.fast,
+                                    emaSlow = cross.slow,
+                                    fastEma = fastEma,
+                                    slowEma = slowEma,
+                                    close = close
+                                )
 
                                 log.info(
                                     "[{}] {} {} EMA{}/EMA{}",
@@ -156,13 +166,7 @@ private suspend fun runTimeframeLoop(
                                     cross.fast,
                                     cross.slow
                                 )
-                                sendTelegram(
-                                    client,
-                                    botToken,
-                                    inst.config.telegramChatId,
-                                    inst.config.telegramTopicId,
-                                    msg
-                                )
+                                onAlert(inst.config, msg, meta)
                             }
 
                             cross.prevFastEma = fastEma

@@ -17,12 +17,6 @@ private val jsonParser = Json { ignoreUnknownKeys = true }
 
 fun main() = runBlocking {
     val env = dotenv { ignoreIfMissing = true }
-    val botToken = env["TELEGRAM_BOT_TOKEN"]
-        ?: error(
-            "Missing TELEGRAM_BOT_TOKEN. Add it to a .env file (see .env.example) " +
-                "or export it in your environment."
-        )
-
     val configFile = File("config.json")
     if (!configFile.exists()) {
         error(
@@ -36,10 +30,35 @@ fun main() = runBlocking {
     require(config.instances.isNotEmpty()) { "config.json must define at least one instance" }
     config.instances.forEach { it.locale() }
 
+    val botToken = env["TELEGRAM_BOT_TOKEN"]?.takeIf { it.isNotBlank() }
+    when (config.mode) {
+        NotifyMode.TELEGRAM -> {
+            require(!botToken.isNullOrBlank()) {
+                "Missing TELEGRAM_BOT_TOKEN. Add it to a .env file (see .env.example) " +
+                    "or export it in your environment."
+            }
+            config.instances.forEach { inst ->
+                require(!inst.telegramChatId.isNullOrBlank()) {
+                    "Instance \"${inst.name}\" needs telegramChatId when mode is \"telegram\""
+                }
+            }
+        }
+        NotifyMode.WEB -> {
+            require(config.web.port in 1..65535) { "web.port must be between 1 and 65535" }
+            require(config.web.maxAlerts >= 1) { "web.maxAlerts must be at least 1" }
+        }
+    }
+
+    log.info("Mode: {}", config.mode)
     log.info("Starting Eagle with ${config.instances.size} instance(s):")
     config.instances.forEach { inst ->
         val crosses = inst.emaCrosses.joinToString(", ") { "EMA${it.fast}/EMA${it.slow}" }
         log.info("  • [{}] {} | {}", inst.name, inst.timeframe, crosses)
+    }
+
+    val alertHub = if (config.mode == NotifyMode.WEB) AlertHub(config.web.maxAlerts) else null
+    if (alertHub != null) {
+        startWebDashboard(config.web.host, config.web.port, alertHub, jsonParser)
     }
 
     val client = HttpClient(CIO) {
@@ -54,24 +73,44 @@ fun main() = runBlocking {
     val symbols = fetchTopUsdtSymbols(client, config.binance.restUrl, config.binance.topPairs)
     log.info("Watching {} pairs (showing first 12): {} …", symbols.size, symbols.take(12).joinToString())
 
-    config.instances.forEach { inst ->
-        val loc = inst.locale()
-        val crosses = inst.emaCrosses.joinToString(" | ") { "EMA${it.fast}/EMA${it.slow}" }
-        val safeName = inst.name.escapeTelegramHtml()
-        val msg = buildString {
-            appendLine("🚀 <b>${loc.startupHeadline()}</b> — <i>$safeName</i>")
-            appendLine("• ${loc.labelTimeframe()}: <b>${inst.timeframe}</b>")
-            appendLine("• ${loc.labelCrosses()}: <b>$crosses</b>")
-            append("• ${loc.labelPairs()}: <b>${symbols.size}</b>")
+    val tokenForTelegram = botToken
+
+    if (config.mode == NotifyMode.TELEGRAM) {
+        val token = tokenForTelegram!!
+        config.instances.forEach { inst ->
+            val loc = inst.locale()
+            val crosses = inst.emaCrosses.joinToString(" | ") { "EMA${it.fast}/EMA${it.slow}" }
+            val safeName = inst.name.escapeTelegramHtml()
+            val msg = buildString {
+                appendLine("🚀 <b>${loc.startupHeadline()}</b> — <i>$safeName</i>")
+                appendLine("• ${loc.labelTimeframe()}: <b>${inst.timeframe}</b>")
+                appendLine("• ${loc.labelCrosses()}: <b>$crosses</b>")
+                append("• ${loc.labelPairs()}: <b>${symbols.size}</b>")
+            }
+            sendTelegram(client, token, inst.telegramChatId!!, inst.telegramTopicId, msg)
         }
-        sendTelegram(client, botToken, inst.telegramChatId, inst.telegramTopicId, msg)
+    }
+
+    val onAlert: suspend (InstanceConfig, String, AlertMeta) -> Unit = when (config.mode) {
+        NotifyMode.TELEGRAM -> { inst, html, _ ->
+            sendTelegram(
+                client,
+                tokenForTelegram!!,
+                inst.telegramChatId!!,
+                inst.telegramTopicId,
+                html
+            )
+        }
+        NotifyMode.WEB -> { inst, html, meta ->
+            alertHub!!.publish(inst, meta, html)
+        }
     }
 
     monitor(
         client = client,
-        botToken = botToken,
         symbols = symbols,
         wsBase = config.binance.wsUrl,
-        instances = config.instances
+        instances = config.instances,
+        onAlert = onAlert
     )
 }
