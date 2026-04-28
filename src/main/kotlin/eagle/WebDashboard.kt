@@ -114,81 +114,181 @@ private fun dashboardHtml(): String = """
       line-height: 1.45;
     }
     h1 { font-size: 1.25rem; font-weight: 600; margin: 0 0 0.25rem; }
-    .sub { color: var(--muted); font-size: 0.875rem; margin-bottom: 1.25rem; }
-    #status { font-size: 0.8rem; color: var(--muted); margin-bottom: 1rem; }
+    .sub { color: var(--muted); font-size: 0.875rem; margin-bottom: 1rem; }
+    .toolbar {
+      display: flex; flex-wrap: wrap; gap: 0.5rem 1rem; align-items: center;
+      margin-bottom: 0.75rem; max-width: 52rem;
+    }
+    .toolbar button {
+      font: inherit; cursor: pointer; padding: 0.35rem 0.75rem; border-radius: 6px;
+      border: 1px solid var(--border); background: var(--panel); color: var(--text);
+    }
+    .toolbar button.active { border-color: var(--bull); color: var(--bull); }
+    .toolbar label { font-size: 0.8rem; color: var(--muted); display: inline-flex; align-items: center; gap: 0.35rem; }
+    .toolbar input[type="number"] {
+      width: 4.2rem; font: inherit; padding: 0.25rem 0.4rem; border-radius: 4px;
+      border: 1px solid var(--border); background: var(--bg); color: var(--text);
+    }
+    #status { font-size: 0.8rem; color: var(--muted); margin-bottom: 0.75rem; }
     #status.live { color: var(--bull); }
-    .list { display: flex; flex-direction: column; gap: 0.65rem; max-width: 52rem; }
-    article {
+    .list-wrap {
+      max-width: 52rem; max-height: calc(100vh - 11rem); overflow-y: auto;
+      border: 1px solid var(--border); border-radius: 8px; background: var(--bg);
+    }
+    .list { display: flex; flex-direction: column; gap: 0.35rem; padding: 0.5rem; }
+    details.row {
       background: var(--panel);
       border: 1px solid var(--border);
-      border-radius: 8px;
-      padding: 0.85rem 1rem;
+      border-radius: 6px;
+      font-size: 0.78rem;
     }
-    article.bull { border-left: 3px solid var(--bull); }
-    article.bear { border-left: 3px solid var(--bear); }
-    .meta {
-      font-size: 0.75rem;
-      color: var(--muted);
-      margin-bottom: 0.5rem;
+    details.row.bull { border-left: 3px solid var(--bull); }
+    details.row.bear { border-left: 3px solid var(--bear); }
+    details.row summary {
+      cursor: pointer; padding: 0.45rem 0.55rem; list-style: none;
+      font-variant-numeric: tabular-nums; user-select: none;
     }
-    .body { font-size: 0.9rem; }
-    .body b { color: var(--text); }
+    details.row summary::-webkit-details-marker { display: none; }
+    details.row summary::before { content: '▸ '; color: var(--muted); }
+    details.row[open] summary::before { content: '▾ '; }
+    .row-body {
+      padding: 0 0.55rem 0.55rem 1.4rem; font-size: 0.88rem; border-top: 1px solid var(--border);
+    }
+    .row-body b { color: var(--text); }
   </style>
 </head>
 <body>
   <h1>Eagle alerts</h1>
-  <p class="sub">Local dashboard — new crosses appear below as they fire.</p>
+  <p class="sub">Compact rows — expand for full message. Live shows only the newest slice; Historical loads the full buffer.</p>
+  <div class="toolbar">
+    <button type="button" id="btnLive" class="active">Live</button>
+    <button type="button" id="btnHist">Historical</button>
+    <label>Max rows (live) <input type="number" id="liveCap" min="15" max="300" value="80" step="5"/></label>
+  </div>
   <p id="status">Connecting…</p>
-  <div id="alerts" class="list"></div>
+  <div class="list-wrap"><div id="alerts" class="list"></div></div>
   <script>
     const el = document.getElementById('alerts');
     const st = document.getElementById('status');
+    const btnLive = document.getElementById('btnLive');
+    const btnHist = document.getElementById('btnHist');
+    const inpCap = document.getElementById('liveCap');
+
+    let mode = 'live';
+
+    function liveCapVal() {
+      const n = parseInt(inpCap.value, 10);
+      return Number.isFinite(n) ? Math.min(300, Math.max(15, n)) : 80;
+    }
 
     function fmtTime(ms) {
       const d = new Date(ms);
-      return d.toLocaleString(undefined, {
-        dateStyle: 'short', timeStyle: 'medium'
-      });
+      return d.toLocaleString(undefined, { dateStyle: 'short', timeStyle: 'medium' });
     }
 
-    function card(a) {
-      const art = document.createElement('article');
-      art.className = a.bullish ? 'bull' : 'bear';
-      const side = a.bullish ? 'Bullish' : 'Bearish';
-      const meta = document.createElement('div');
-      meta.className = 'meta';
-      meta.textContent = '#' + a.id + ' · ' + fmtTime(a.timestampMillis) + ' · ' + a.instanceName +
-        ' · ' + a.symbol + ' ' + a.timeframe + ' · ' + side + ' · EMA' + a.emaFast + '/EMA' + a.emaSlow;
+    function compactLine(a) {
+      const mark = a.bullish ? '▲' : '▼';
+      const side = a.bullish ? 'bull' : 'bear';
+      return mark + ' ' + fmtTime(a.timestampMillis) + '  ' + a.symbol + '  ' + a.timeframe + '  ' +
+        a.instanceName + '  EMA' + a.emaFast + '/' + a.emaSlow + '  ' + side;
+    }
+
+    function rowNode(a) {
+      const det = document.createElement('details');
+      det.className = 'row ' + (a.bullish ? 'bull' : 'bear');
+      const sum = document.createElement('summary');
+      sum.textContent = '#' + a.id + '  ' + compactLine(a);
       const body = document.createElement('div');
-      body.className = 'body';
+      body.className = 'row-body';
       body.innerHTML = a.messageHtml;
-      art.appendChild(meta);
-      art.appendChild(body);
-      return art;
+      det.appendChild(sum);
+      det.appendChild(body);
+      return det;
     }
 
-    function prepend(a) {
-      el.insertBefore(card(a), el.firstChild);
+    function trimLiveOverCap() {
+      if (mode !== 'live') return;
+      const cap = liveCapVal();
+      while (el.children.length > cap) {
+        el.removeChild(el.lastChild);
+      }
     }
 
-    fetch('/api/alerts').then(r => r.json()).then(rows => {
-      rows.forEach(prepend);
-    }).catch(() => { st.textContent = 'Could not load history'; });
+    function prependLive(a) {
+      if (mode !== 'live') return;
+      el.insertBefore(rowNode(a), el.firstChild);
+      trimLiveOverCap();
+    }
+
+    function renderLiveFromRows(rows) {
+      el.innerHTML = '';
+      const cap = liveCapVal();
+      const newestFirst = rows.slice().reverse();
+      const slice = newestFirst.slice(0, cap);
+      slice.forEach(function (a) { el.appendChild(rowNode(a)); });
+    }
+
+    function loadHistorical() {
+      st.textContent = 'Loading history…';
+      fetch('/api/alerts').then(function (r) { return r.json(); }).then(function (rows) {
+        el.innerHTML = '';
+        const newestFirst = rows.slice().reverse();
+        newestFirst.forEach(function (a) { el.appendChild(rowNode(a)); });
+        st.textContent = 'Historical · ' + newestFirst.length + ' alerts (newest at top) · live stream paused';
+        st.className = '';
+      }).catch(function () { st.textContent = 'Could not load history'; });
+    }
+
+    function loadLiveBootstrap() {
+      fetch('/api/alerts').then(function (r) { return r.json(); }).then(function (rows) {
+        renderLiveFromRows(rows);
+        updateLiveStatus();
+      }).catch(function () { st.textContent = 'Could not load recent alerts'; });
+    }
+
+    function updateLiveStatus() {
+      if (mode !== 'live') return;
+      const cap = liveCapVal();
+      const n = el.children.length;
+      const stream = es.readyState === EventSource.OPEN ? 'stream on' : 'stream connecting…';
+      st.textContent = 'Live · ' + stream + ' · showing ' + n + ' / max ' + cap;
+      st.className = 'live';
+    }
+
+    function setMode(next) {
+      mode = next;
+      btnLive.classList.toggle('active', next === 'live');
+      btnHist.classList.toggle('active', next === 'hist');
+      inpCap.disabled = next === 'hist';
+      if (next === 'hist') { loadHistorical(); return; }
+      loadLiveBootstrap();
+    }
+
+    btnLive.addEventListener('click', function () { setMode('live'); });
+    btnHist.addEventListener('click', function () { setMode('hist'); });
+    inpCap.addEventListener('change', function () {
+      if (mode !== 'live') return;
+      fetch('/api/alerts').then(function (r) { return r.json(); }).then(function (rows) {
+        renderLiveFromRows(rows);
+        updateLiveStatus();
+      });
+    });
 
     const es = new EventSource('/api/events');
-    es.onopen = () => {
-      st.textContent = 'Live (SSE connected)';
-      st.className = 'live';
-    };
-    es.onmessage = (ev) => {
+    es.onopen = function () { if (mode === 'live') updateLiveStatus(); };
+    es.onmessage = function (ev) {
       try {
-        prepend(JSON.parse(ev.data));
+        const a = JSON.parse(ev.data);
+        prependLive(a);
+        if (mode === 'live') updateLiveStatus();
       } catch (e) {}
     };
-    es.onerror = () => {
+    es.onerror = function () {
       st.textContent = 'SSE disconnected — refresh the page';
       st.className = '';
     };
+
+    loadLiveBootstrap();
   </script>
 </body>
 </html>
